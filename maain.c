@@ -5,28 +5,6 @@
 
 #define INVENTORY_SIZE 10
 
-//функция вывода инвентаря
-void print_inventory(const int inventory[], int size) {
-    printf("--- Инвентарь ---\n");
-    for (int i = 0; i < size; i++) {
-        printf("Слот %d: [%d] (", i, inventory[i]);
-        switch (inventory[i]) {
-        case 0: printf("Пусто"); break;
-        case 1: printf("Дерево"); break;
-        case 2: printf("Камень"); break;
-        case 3: printf("Семена"); break;
-        case 4: printf("Пшеница"); break;
-        case 5: printf("Яблоко"); break;
-        case 6: printf("Лопата"); break;
-        case 7: printf("Вода"); break;
-        case 8: printf("Удобрение"); break;
-        case 9: printf("Золото"); break;
-        default: printf("Неизвестно"); break;
-        }
-        printf(")\n");
-    }
-}
-
 int main() {
     system("chcp 65001 > nul");
 
@@ -37,6 +15,28 @@ int main() {
     int current_day = 1;
     int current_hour = 8;
     int inventory[INVENTORY_SIZE] = { 1, 2, 3, 0, 4, 5, 0, 7, 1, 9 };
+
+    //двумерный массив для названий из файла items.txt
+    char item_names[10][32] = {
+        {"Пусто"}, {"Дерево"}, {"Камень"}, {"Семена"}, {"Пшеница"},
+        {"Яблоко"}, {"Лопата"}, {"Вода"}, {"Удобрение"}, {"Золото"}
+    };
+
+    // Чтение items.txt 
+    FILE* f = fopen("items.txt", "r");
+    if (f != NULL) {
+        int id;
+        while (fscanf(f, "%d", &id) == 1) {
+            if (id < 0 || id >= 10) {
+                char tmp[64];
+                if (fscanf(f, "%63s", tmp) != 1) break;
+                continue;
+            }
+            if (fscanf(f, "%31s", item_names[id]) != 1) break;
+        }
+        fclose(f);
+    }
+
     int choice = -1;
 
     while (1) {
@@ -47,6 +47,8 @@ int main() {
         printf("[4] Положить предмет в слот\n");
         printf("[5] Выбросить предмет\n");
         printf("[6] Ревизия ресурсов\n");
+        printf("[7] Поиск предмета по названию\n");
+        printf("[8] Записать состояние в дневник (diary.txt)\n");
         printf("[0] Выход\n");
         printf("Выберите пункт: ");
 
@@ -77,7 +79,10 @@ int main() {
         }
 
         case 3:
-            print_inventory(inventory, INVENTORY_SIZE);
+            printf("--- Инвентарь ---\n");
+            for (int i = 0; i < INVENTORY_SIZE; i++) {
+                printf("Слот %d: [%d] (%s)\n", i, inventory[i], item_names[inventory[i]]);
+            }
             break;
 
         case 4: {
@@ -110,6 +115,53 @@ int main() {
                 }
             }
             printf("\nВсего: %d\n", count);
+            break;
+        }
+
+              // ПУНКТ 7: Поиск по названию 
+        case 7: {
+            char query[32];
+            printf("Введите название для поиска: ");
+            scanf("%s", query);
+
+            int found_id = -1;
+            for (int i = 0; i < 10; i++) {
+                if (strcmp(item_names[i], query) == 0) {
+                    found_id = i;
+                    break;
+                }
+            }
+
+            if (found_id == -1) {
+                printf("Предмет не найден в каталоге!\n");
+                break;
+            }
+
+            printf("Найден в слотах: ");
+            int c = 0;
+            for (int i = 0; i < INVENTORY_SIZE; i++) {
+                if (inventory[i] == found_id) {
+                    printf("%d ", i);
+                    c++;
+                }
+            }
+            printf("(Всего: %d)\n", c);
+            break;
+        }
+
+              // ПУНКТ 8: Запись в дневник 
+        case 8: {
+            FILE* df = fopen("diary.txt", "a");
+            if (df != NULL) {
+                fprintf(df, "Фермер: %s | День: %d, Время: %02d:00\n", farmer_name, current_day, current_hour);
+                fprintf(df, "Инвентарь: ");
+                for (int i = 0; i < INVENTORY_SIZE; i++) {
+                    fprintf(df, "[%d:%s] ", inventory[i], item_names[inventory[i]]);
+                }
+                fprintf(df, "\n-------------------\n");
+                fclose(df);
+                printf("Записано в diary.txt!\n");
+            }
             break;
         }
 
