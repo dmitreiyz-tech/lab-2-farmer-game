@@ -12,27 +12,24 @@ int main() {
     printf("Введите имя вашего фермера: ");
     scanf("%31s", farmer_name);
 
-    int current_day = 1;
+    int current_day = 3; 
     int current_hour = 8;
     int inventory[INVENTORY_SIZE] = { 1, 2, 3, 0, 4, 5, 0, 7, 1, 9 };
 
-    //двумерный массив для названий из файла items.txt
     char item_names[10][32] = {
         {"Пусто"}, {"Дерево"}, {"Камень"}, {"Семена"}, {"Пшеница"},
         {"Яблоко"}, {"Лопата"}, {"Вода"}, {"Удобрение"}, {"Золото"}
     };
 
-    // Чтение items.txt 
     FILE* f = fopen("items.txt", "r");
     if (f != NULL) {
         int id;
-        while (fscanf(f, "%d", &id) == 1) {
-            if (id < 0 || id >= 10) {
-                char tmp[64];
-                if (fscanf(f, "%63s", tmp) != 1) break;
-                continue;
+        char name[32];
+        while (fscanf(f, "%d %31s", &id, name) == 2) {
+            if (id >= 0 && id < 10) {
+                strncpy(item_names[id], name, sizeof(item_names[id]) - 1);
+                item_names[id][sizeof(item_names[id]) - 1] = '\0';
             }
-            if (fscanf(f, "%31s", item_names[id]) != 1) break;
         }
         fclose(f);
     }
@@ -40,7 +37,7 @@ int main() {
     int choice = -1;
 
     while (1) {
-        printf("\n=== ВЕСЕЛЫЙ ФЕРМЕР (Имя: %s) ===\n", farmer_name);
+        printf("\n=== ВЕСЕЛЫЙ ФЕРМЕР (Имя: %s) [День: %d] ===\n", farmer_name, current_day);
         printf("[1] Посмотреть на часы\n");
         printf("[2] Промотать время (Поработать)\n");
         printf("[3] Посмотреть инвентарь\n");
@@ -49,6 +46,7 @@ int main() {
         printf("[6] Ревизия ресурсов\n");
         printf("[7] Поиск предмета по названию\n");
         printf("[8] Записать состояние в дневник (diary.txt)\n");
+        printf("[9] Доска объявлений: проверка квестов\n");
         printf("[0] Выход\n");
         printf("Выберите пункт: ");
 
@@ -118,7 +116,6 @@ int main() {
             break;
         }
 
-              // ПУНКТ 7: Поиск по названию 
         case 7: {
             char query[32];
             printf("Введите название для поиска: ");
@@ -149,7 +146,6 @@ int main() {
             break;
         }
 
-              // ПУНКТ 8: Запись в дневник 
         case 8: {
             FILE* df = fopen("diary.txt", "a");
             if (df != NULL) {
@@ -162,6 +158,77 @@ int main() {
                 fclose(df);
                 printf("Записано в diary.txt!\n");
             }
+            break;
+        }
+
+              // ПУНКТ 9: Доска объявлений 
+        case 9: {
+            FILE* in = fopen("input.txt", "r");
+            FILE* out = fopen("output.txt", "w");
+            if (in == NULL || out == NULL) {
+                printf("Ошибка открытия файлов input.txt или output.txt!\n");
+                if (in) fclose(in);
+                if (out) fclose(out);
+                break;
+            }
+
+            char line[128];
+            fprintf(out, "=== ДОСКА ОБЪЯВЛЕНИЙ (АКТИВНЫЕ КВЕСТЫ) ===\n");
+
+            while (fgets(line, sizeof(line), in) != NULL) {
+                int quest_day;
+                char customer[32];
+                char req_item[32];
+                int reward;
+
+                // Читаем строку формата: День | Заказчик | Предмет | Награда
+                if (sscanf(line, "%d | %31[^|] | %31[^|] | %d", &quest_day, customer, req_item, &reward) == 4) {
+
+                  
+                  
+                    char* p = customer + strlen(customer) - 1;
+                    while (p >= customer && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) *p-- = '\0';
+
+                    p = req_item + strlen(req_item) - 1;
+                    while (p >= req_item && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) *p-- = '\0';
+                    char* clean_item = req_item;
+                    while (*clean_item == ' ') clean_item++;
+
+                    // 1. Фильтрация по дню 
+                    if (quest_day <= current_day) {
+
+                        // Находим ID требуемого предмета по его названию в item_names
+                        int req_id = -1;
+                        for (int i = 0; i < 10; i++) {
+                            if (strcmp(item_names[i], clean_item) == 0) {
+                                req_id = i;
+                                break;
+                            }
+                        }
+
+                        // 2. Проверяем, есть ли этот предмет в инвентаре игрока
+                        int has_item = 0;
+                        for (int i = 0; i < INVENTORY_SIZE; i++) {
+                            if (inventory[i] == req_id) {
+                                has_item = 1;
+                                break;
+                            }
+                        }
+
+                        // 3. Выводим в output.txt 
+                        if (has_item) {
+                            fprintf(out, "Заказчик: %s | Предмет: %s | Награда: %d [ГОТОВО К СДАЧЕ]\n", customer, clean_item, reward);
+                        }
+                        else {
+                            fprintf(out, "Заказчик: %s | Предмет: %s | Награда: %d [В ПРОЦЕССЕ]\n", customer, clean_item, reward);
+                        }
+                    }
+                }
+            }
+
+            fclose(in);
+            fclose(out);
+            printf("Доска объявлений обработана! Результаты записаны в output.txt.\n");
             break;
         }
 
