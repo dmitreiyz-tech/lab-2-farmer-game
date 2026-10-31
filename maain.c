@@ -12,7 +12,7 @@ int main() {
     printf("Введите имя вашего фермера: ");
     scanf("%31s", farmer_name);
 
-    int current_day = 3; 
+    int current_day = 3;
     int current_hour = 8;
     int inventory[INVENTORY_SIZE] = { 1, 2, 3, 0, 4, 5, 0, 7, 1, 9 };
 
@@ -46,7 +46,7 @@ int main() {
         printf("[6] Ревизия ресурсов\n");
         printf("[7] Поиск предмета по названию\n");
         printf("[8] Записать состояние в дневник (diary.txt)\n");
-        printf("[9] Доска объявлений: проверка квестов\n");
+        printf("[9] Проверка рецептов крафта\n");
         printf("[0] Выход\n");
         printf("Выберите пункт: ");
 
@@ -161,7 +161,7 @@ int main() {
             break;
         }
 
-              // ПУНКТ 9: Доска объявлений 
+              // ПУНКТ 9: Проверка рецептов крафта
         case 9: {
             FILE* in = fopen("input.txt", "r");
             FILE* out = fopen("output.txt", "w");
@@ -172,63 +172,66 @@ int main() {
                 break;
             }
 
-            char line[128];
-            fprintf(out, "=== ДОСКА ОБЪЯВЛЕНИЙ (АКТИВНЫЕ КВЕСТЫ) ===\n");
+            // Считаем количество каждого предмета в инвентаре игрока
+            int inv_counts[10] = { 0 };
+            for (int i = 0; i < INVENTORY_SIZE; i++) {
+                int id = inventory[i];
+                if (id >= 0 && id < 10) {
+                    inv_counts[id]++;
+                }
+            }
+
+            char line[256];
+            fprintf(out, "=== РЕЗУЛЬТАТЫ ПРОВЕРКИ РЕЦЕПТОВ КРАФТА ===\n");
 
             while (fgets(line, sizeof(line), in) != NULL) {
-                int quest_day;
-                char customer[32];
-                char req_item[32];
-                int reward;
+                line[strcspn(line, "\r\n")] = 0;
+                if (strlen(line) == 0) continue;
 
-                // Читаем строку формата: День | Заказчик | Предмет | Награда
-                if (sscanf(line, "%d | %31[^|] | %31[^|] | %d", &quest_day, customer, req_item, &reward) == 4) {
+                char recipe_name[64];
+                char* colon = strchr(line, ':');
+                if (colon == NULL) continue;
 
-                  
-                  
-                    char* p = customer + strlen(customer) - 1;
-                    while (p >= customer && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) *p-- = '\0';
+                int name_len = (int)(colon - line);
+                if (name_len >= sizeof(recipe_name)) name_len = sizeof(recipe_name) - 1;
+                strncpy(recipe_name, line, name_len);
+                recipe_name[name_len] = '\0';
 
-                    p = req_item + strlen(req_item) - 1;
-                    while (p >= req_item && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) *p-- = '\0';
-                    char* clean_item = req_item;
-                    while (*clean_item == ' ') clean_item++;
-
-                    // 1. Фильтрация по дню 
-                    if (quest_day <= current_day) {
-
-                        // Находим ID требуемого предмета по его названию в item_names
-                        int req_id = -1;
-                        for (int i = 0; i < 10; i++) {
-                            if (strcmp(item_names[i], clean_item) == 0) {
-                                req_id = i;
-                                break;
-                            }
-                        }
-
-                        // 2. Проверяем, есть ли этот предмет в инвентаре игрока
-                        int has_item = 0;
-                        for (int i = 0; i < INVENTORY_SIZE; i++) {
-                            if (inventory[i] == req_id) {
-                                has_item = 1;
-                                break;
-                            }
-                        }
-
-                        // 3. Выводим в output.txt 
-                        if (has_item) {
-                            fprintf(out, "Заказчик: %s | Предмет: %s | Награда: %d [ГОТОВО К СДАЧЕ]\n", customer, clean_item, reward);
-                        }
-                        else {
-                            fprintf(out, "Заказчик: %s | Предмет: %s | Награда: %d [В ПРОЦЕССЕ]\n", customer, clean_item, reward);
-                        }
+                // Считаем требуемое количество ресурсов для рецепта
+                int req_counts[10] = { 0 };
+                char* ptr = colon + 1;
+                int req_id;
+                while (sscanf(ptr, "%d", &req_id) == 1) {
+                    if (req_id >= 0 && req_id < 10) {
+                        req_counts[req_id]++;
                     }
+                    while (*ptr != '\0' && *ptr != ' ' && *ptr != '\t') ptr++;
+                    while (*ptr == ' ' || *ptr == '\t') ptr++;
+                }
+
+                int possible = 1;
+                int missing_id = -1;
+                for (int i = 0; i < 10; i++) {
+                    if (req_counts[i] > inv_counts[i]) {
+                        possible = 0;
+                        missing_id = i;
+                        break;
+                    }
+                }
+
+                // Вывод результата в output.txt
+                if (possible) {
+                    fprintf(out, "Рецепт \"%s\": [ДОСТУПНО]\n", recipe_name);
+                }
+                else {
+                    const char* miss_name = (missing_id >= 0 && missing_id < 10) ? item_names[missing_id] : "Неизвестно";
+                    fprintf(out, "Рецепт \"%s\": [НЕ ХВАТАЕТ РЕСУРСОВ] (не хватает: %s)\n", recipe_name, miss_name);
                 }
             }
 
             fclose(in);
             fclose(out);
-            printf("Доска объявлений обработана! Результаты записаны в output.txt.\n");
+            printf("Проверка рецептов завершена! Результаты записаны в output.txt.\n");
             break;
         }
 
