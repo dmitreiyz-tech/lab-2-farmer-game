@@ -275,7 +275,6 @@ void check_crafting_recipes(const int inventory[], const char item_names[TOTAL_I
         strncpy(recipe_name, line, name_len);
         recipe_name[name_len] = '\0';
 
-        
         int req_counts[TOTAL_ITEMS] = { 0 };
         char* ptr = colon + 1;
         int req_id;
@@ -287,14 +286,27 @@ void check_crafting_recipes(const int inventory[], const char item_names[TOTAL_I
             while (*ptr == ' ' || *ptr == '\t') ptr++;
         }
 
-        
         int possible = 1;
-        int missing_id = -1;
+        char missing_details[256] = "";
+        int first_missing = 1;
+
         for (int i = 0; i < TOTAL_ITEMS; i++) {
             if (req_counts[i] > inv_counts[i]) {
                 possible = 0;
-                missing_id = i;
-                break;
+                int diff = req_counts[i] - inv_counts[i]; 
+                const char* miss_name = (i >= 0 && i < TOTAL_ITEMS) ? item_names[i] : "Неизвестно";
+
+                char temp[64];
+                snprintf(temp, sizeof(temp), "%s (%d шт.)", miss_name, diff);
+
+                if (first_missing) {
+                    snprintf(missing_details, sizeof(missing_details), "%s", temp);
+                    first_missing = 0;
+                }
+                else {
+                    strncat(missing_details, ", ", sizeof(missing_details) - strlen(missing_details) - 1);
+                    strncat(missing_details, temp, sizeof(missing_details) - strlen(missing_details) - 1);
+                }
             }
         }
 
@@ -302,8 +314,7 @@ void check_crafting_recipes(const int inventory[], const char item_names[TOTAL_I
             fprintf(out, "Рецепт \"%s\": [ДОСТУПНО]\n", recipe_name);
         }
         else {
-            const char* miss_name = (missing_id >= 0 && missing_id < TOTAL_ITEMS) ? item_names[missing_id] : "Неизвестно";
-            fprintf(out, "Рецепт \"%s\": [НЕ ХВАТАЕТ РЕСУРСОВ] (не хватает: %s)\n", recipe_name, miss_name);
+            fprintf(out, "Рецепт \"%s\": [НЕ ХВАТАЕТ РЕСУРСОВ] (не хватает: %s)\n", recipe_name, missing_details);
         }
     }
 
