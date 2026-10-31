@@ -149,6 +149,7 @@ int main() {
         case 8: {
             FILE* df = fopen("diary.txt", "a");
             if (df != NULL) {
+                // 1. Формируем строку и записываем в файл diary.txt
                 fprintf(df, "Фермер: %s | День: %d, Время: %02d:00\n", farmer_name, current_day, current_hour);
                 fprintf(df, "Инвентарь: ");
                 for (int i = 0; i < INVENTORY_SIZE; i++) {
@@ -156,7 +157,19 @@ int main() {
                 }
                 fprintf(df, "\n-------------------\n");
                 fclose(df);
-                printf("Записано в diary.txt!\n");
+
+                // 2. Дублируем вывод на экран 
+                printf("\n--- Запись в дневнике (diary.txt) ---\n");
+                printf("Фермер: %s | День: %d, Время: %02d:00\n", farmer_name, current_day, current_hour);
+                printf("Инвентарь: ");
+                for (int i = 0; i < INVENTORY_SIZE; i++) {
+                    printf("[%d:%s] ", inventory[i], item_names[inventory[i]]);
+                }
+                printf("\n-----------------------------------\n");
+                printf("Успешно записано в diary.txt и выведено на экран!\n");
+            }
+            else {
+                printf("Ошибка открытия файла diary.txt!\n");
             }
             break;
         }
