@@ -10,6 +10,13 @@
 
 #define MIN_MAP_SIZE 5
 #define MAX_MAP_SIZE 30
+#define OBSTACLE_CHANCE_PERCENT 20
+
+#define CELL_EMPTY '.'
+#define CELL_TREE 'T'
+#define CELL_ROCK 'R'
+#define CELL_HERO '@'
+#define CELL_CAMPFIRE '^'
 
 void load_item_catalog(char item_names[TOTAL_ITEMS][32]);
 void show_clock(int current_day, int current_hour);
@@ -24,6 +31,9 @@ void check_crafting_recipes(const int inventory[], const char item_names[TOTAL_I
 
 char** create_map(int height, int width);
 void free_map(char** map, int height);
+void place_random_object(char** map, int height, int width, char symbol, int* out_y, int* out_x);
+void generate_forest_map(char** map, int height, int width);
+void render_map(char** map, int height, int width, int hero_y, int hero_x);
 void start_adventure(void);
 
 int get_safe_int(const char* prompt, int min_val, int max_val) {
@@ -364,6 +374,58 @@ void free_map(char** map, int height) {
     free(map);
 }
 
+void place_random_object(char** map, int height, int width, char symbol, int* out_y, int* out_x) {
+    while (1) {
+        int r = rand() % height;
+        int c = rand() % width;
+        if (map[r][c] == CELL_EMPTY) {
+            map[r][c] = symbol;
+            if (out_y != NULL) *out_y = r;
+            if (out_x != NULL) *out_x = c;
+            break;
+        }
+    }
+}
+
+void generate_forest_map(char** map, int height, int width) {
+    int empty_count = 0;
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            int roll = rand() % 100;
+            if (roll < OBSTACLE_CHANCE_PERCENT) {
+                map[i][j] = (rand() % 2 == 0) ? CELL_TREE : CELL_ROCK;
+            }
+            else {
+                map[i][j] = CELL_EMPTY;
+                empty_count++;
+            }
+        }
+    }
+
+    if (empty_count < 3) {
+        map[0][0] = CELL_EMPTY;
+        map[0][1] = CELL_EMPTY;
+        map[1][0] = CELL_EMPTY;
+    }
+
+    place_random_object(map, height, width, CELL_CAMPFIRE, NULL, NULL);
+}
+
+void render_map(char** map, int height, int width, int hero_y, int hero_x) {
+    printf("\n=== КАРТА ЛЕСА (%dx%d) ===\n", height, width);
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            if (i == hero_y && j == hero_x) {
+                printf("%c ", CELL_HERO);
+            }
+            else {
+                printf("%c ", map[i][j]);
+            }
+        }
+        printf("\n");
+    }
+}
+
 void start_adventure(void) {
     int height = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
     int width = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
@@ -371,8 +433,8 @@ void start_adventure(void) {
     char** map = create_map(height, width);
     if (map == NULL) return;
 
-    printf("\nКарта леса размером %dx%d создана в динамической памяти.\n", height, width);
+    generate_forest_map(map, height, width);
+    render_map(map, height, width, -1, -1);
 
     free_map(map, height);
-    printf("Динамическая память карты успешно очищена.\n");
 }
