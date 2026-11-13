@@ -38,6 +38,7 @@ void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x);
 void render_map(char** map, int height, int width, int hero_y, int hero_x);
 char get_safe_command(void);
 int is_walkable(char cell);
+int apply_torus_coords(int* new_y, int* new_x, int height, int width);
 void start_adventure(void);
 
 int get_safe_int(const char* prompt, int min_val, int max_val) {
@@ -428,7 +429,8 @@ void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x) {
 }
 
 void render_map(char** map, int height, int width, int hero_y, int hero_x) {
-    printf("\n=== КАРТА ЛЕСА (%dx%d) ===\n", height, width);
+    printf("\n=== ЛЕС-КОЛЬЦО (%dx%d) ===\n", height, width);
+    printf("Обозначения: [@] Герой | [^] Костер (выход Q) | [T]/[R] Препятствия\n");
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             if (i == hero_y && j == hero_x) {
@@ -445,7 +447,7 @@ void render_map(char** map, int height, int width, int hero_y, int hero_x) {
 char get_safe_command(void) {
     char buffer[32];
     while (1) {
-        printf("\nВаш ход (W - вверх, A - влево, S - вниз, D - вправо, Q - домой): ");
+        printf("\nВаш ход (W - вверх, A - влево, S - вниз, D - вправо, Q - домой с костра): ");
         if (scanf("%31s", buffer) != 1) {
             while (getchar() != '\n');
             continue;
@@ -464,6 +466,19 @@ int is_walkable(char cell) {
     return (cell != CELL_TREE && cell != CELL_ROCK);
 }
 
+int apply_torus_coords(int* new_y, int* new_x, int height, int width) {
+    int wrapped = 0;
+    if (*new_y < 0 || *new_y >= height) {
+        *new_y = (*new_y + height) % height;
+        wrapped = 1;
+    }
+    if (*new_x < 0 || *new_x >= width) {
+        *new_x = (*new_x + width) % width;
+        wrapped = 1;
+    }
+    return wrapped;
+}
+
 void start_adventure(void) {
     int height = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
     int width = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
@@ -472,17 +487,25 @@ void start_adventure(void) {
     if (map == NULL) return;
 
     int hero_y = 0, hero_x = 0;
+    int border_crossings = 0;
+
     generate_forest_map(map, height, width);
     spawn_hero(map, height, width, &hero_y, &hero_x);
 
     int running = 1;
     while (running) {
+        printf("\nПереходов через край карты: %d\n", border_crossings);
         render_map(map, height, width, hero_y, hero_x);
         char cmd = get_safe_command();
 
         if (cmd == 'Q') {
-            printf("Возвращаемся домой.\n");
-            running = 0;
+            if (map[hero_y][hero_x] == CELL_CAMPFIRE) {
+                printf("Вы вернулись домой с костра (^)!\n");
+                running = 0;
+            }
+            else {
+                printf("Выход домой (Q) работает только на клетке костра (^)!\n");
+            }
             continue;
         }
 
@@ -494,14 +517,15 @@ void start_adventure(void) {
         else if (cmd == 'A') new_x--;
         else if (cmd == 'D') new_x++;
 
-        if (new_y < 0 || new_y >= height || new_x < 0 || new_x >= width) {
-            printf("Край карты!\n");
-            continue;
-        }
+        int crossed_edge = apply_torus_coords(&new_y, &new_x, height, width);
 
         if (is_walkable(map[new_y][new_x])) {
             hero_y = new_y;
             hero_x = new_x;
+            if (crossed_edge) {
+                border_crossings++;
+                printf("Вы перешли через край леса на противоположную сторону! (Переходов: %d)\n", border_crossings);
+            }
         }
         else {
             printf("Путь преграждает препятствие (%c)!\n", map[new_y][new_x]);
