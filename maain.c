@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 
 #define INVENTORY_SIZE 10
 #define TOTAL_ITEMS 10
@@ -33,7 +34,10 @@ char** create_map(int height, int width);
 void free_map(char** map, int height);
 void place_random_object(char** map, int height, int width, char symbol, int* out_y, int* out_x);
 void generate_forest_map(char** map, int height, int width);
+void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x);
 void render_map(char** map, int height, int width, int hero_y, int hero_x);
+char get_safe_command(void);
+int is_walkable(char cell);
 void start_adventure(void);
 
 int get_safe_int(const char* prompt, int min_val, int max_val) {
@@ -411,6 +415,18 @@ void generate_forest_map(char** map, int height, int width) {
     place_random_object(map, height, width, CELL_CAMPFIRE, NULL, NULL);
 }
 
+void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x) {
+    while (1) {
+        int r = rand() % height;
+        int c = rand() % width;
+        if (map[r][c] == CELL_EMPTY) {
+            *hero_y = r;
+            *hero_x = c;
+            break;
+        }
+    }
+}
+
 void render_map(char** map, int height, int width, int hero_y, int hero_x) {
     printf("\n=== КАРТА ЛЕСА (%dx%d) ===\n", height, width);
     for (int i = 0; i < height; i++) {
@@ -426,6 +442,28 @@ void render_map(char** map, int height, int width, int hero_y, int hero_x) {
     }
 }
 
+char get_safe_command(void) {
+    char buffer[32];
+    while (1) {
+        printf("\nВаш ход (W - вверх, A - влево, S - вниз, D - вправо, Q - домой): ");
+        if (scanf("%31s", buffer) != 1) {
+            while (getchar() != '\n');
+            continue;
+        }
+        if (strlen(buffer) == 1) {
+            char cmd = (char)toupper((unsigned char)buffer[0]);
+            if (cmd == 'W' || cmd == 'A' || cmd == 'S' || cmd == 'D' || cmd == 'Q') {
+                return cmd;
+            }
+        }
+        printf("Ошибка: введите одну букву (W, A, S, D или Q)!\n");
+    }
+}
+
+int is_walkable(char cell) {
+    return (cell != CELL_TREE && cell != CELL_ROCK);
+}
+
 void start_adventure(void) {
     int height = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
     int width = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
@@ -433,8 +471,42 @@ void start_adventure(void) {
     char** map = create_map(height, width);
     if (map == NULL) return;
 
+    int hero_y = 0, hero_x = 0;
     generate_forest_map(map, height, width);
-    render_map(map, height, width, -1, -1);
+    spawn_hero(map, height, width, &hero_y, &hero_x);
+
+    int running = 1;
+    while (running) {
+        render_map(map, height, width, hero_y, hero_x);
+        char cmd = get_safe_command();
+
+        if (cmd == 'Q') {
+            printf("Возвращаемся домой.\n");
+            running = 0;
+            continue;
+        }
+
+        int new_y = hero_y;
+        int new_x = hero_x;
+
+        if (cmd == 'W') new_y--;
+        else if (cmd == 'S') new_y++;
+        else if (cmd == 'A') new_x--;
+        else if (cmd == 'D') new_x++;
+
+        if (new_y < 0 || new_y >= height || new_x < 0 || new_x >= width) {
+            printf("Край карты!\n");
+            continue;
+        }
+
+        if (is_walkable(map[new_y][new_x])) {
+            hero_y = new_y;
+            hero_x = new_x;
+        }
+        else {
+            printf("Путь преграждает препятствие (%c)!\n", map[new_y][new_x]);
+        }
+    }
 
     free_map(map, height);
 }
