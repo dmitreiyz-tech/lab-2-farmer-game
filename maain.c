@@ -12,12 +12,14 @@
 #define MIN_MAP_SIZE 5
 #define MAX_MAP_SIZE 30
 #define OBSTACLE_CHANCE_PERCENT 20
+#define REQUIRED_WRAPS_FOR_PORTAL 3
 
 #define CELL_EMPTY '.'
 #define CELL_TREE 'T'
 #define CELL_ROCK 'R'
 #define CELL_HERO '@'
 #define CELL_CAMPFIRE '^'
+#define CELL_PORTAL 'P'
 
 void load_item_catalog(char item_names[TOTAL_ITEMS][32]);
 void show_clock(int current_day, int current_hour);
@@ -35,7 +37,7 @@ void free_map(char** map, int height);
 void place_random_object(char** map, int height, int width, char symbol, int* out_y, int* out_x);
 void generate_forest_map(char** map, int height, int width);
 void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x);
-void render_map(char** map, int height, int width, int hero_y, int hero_x);
+void render_map(char** map, int height, int width, int hero_y, int hero_x, int distance, int wraps, int portal_active);
 char get_safe_command(void);
 int is_walkable(char cell);
 int apply_torus_coords(int* new_y, int* new_x, int height, int width);
@@ -92,7 +94,7 @@ int main() {
         printf("[7] Поиск предмета по названию\n");
         printf("[8] Записать состояние в дневник (diary.txt)\n");
         printf("[9] Проверка рецептов крафта\n");
-        printf("[10] Отправиться в приключение\n");
+        printf("[10] Отправиться в приключение (Лес-кольцо)\n");
         printf("[0] Выход\n");
 
         choice = get_safe_int("Выберите пункт: ", 0, MAX_MENU_CHOICE);
@@ -350,7 +352,7 @@ void check_crafting_recipes(const int inventory[], const char item_names[TOTAL_I
     printf("Проверка рецептов завершена! Результаты записаны в output.txt.\n");
 }
 
-// --- ПУНКТ 10: ОТПРАВИТЬСЯ В ПРИКЛЮЧЕНИЕ ---
+// --- ПУНКТ 10: ПРИКЛЮЧЕНИЕ (ЛЕС-КОЛЬЦО) ---
 char** create_map(int height, int width) {
     char** map = (char**)malloc(height * sizeof(char*));
     if (map == NULL) {
@@ -428,9 +430,12 @@ void spawn_hero(char** map, int height, int width, int* hero_y, int* hero_x) {
     }
 }
 
-void render_map(char** map, int height, int width, int hero_y, int hero_x) {
-    printf("\n=== ЛЕС-КОЛЬЦО (%dx%d) ===\n", height, width);
-    printf("Обозначения: [@] Герой | [^] Костер (выход Q) | [T]/[R] Препятствия\n");
+void render_map(char** map, int height, int width, int hero_y, int hero_x, int distance, int wraps, int portal_active) {
+    printf("\n=== ЛЕС-КОЛЬЦО (%dx%d) | Дальность от дома: %d ===\n", height, width, distance);
+    printf("Переходов через край: %d/%d | Портал (P): %s\n",
+        wraps, REQUIRED_WRAPS_FOR_PORTAL, portal_active ? "ОТКРЫТ" : "Скрыт");
+    printf("Обозначения: [@] Герой | [^] Костер (выход Q) | [P] Портал | [T]/[R] Препятствия\n\n");
+
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             if (i == hero_y && j == hero_x) {
@@ -487,24 +492,25 @@ void start_adventure(void) {
     if (map == NULL) return;
 
     int hero_y = 0, hero_x = 0;
+    int distance_from_home = 0;
     int border_crossings = 0;
+    int portal_spawned = 0;
 
     generate_forest_map(map, height, width);
     spawn_hero(map, height, width, &hero_y, &hero_x);
 
     int running = 1;
     while (running) {
-        printf("\nПереходов через край карты: %d\n", border_crossings);
-        render_map(map, height, width, hero_y, hero_x);
+        render_map(map, height, width, hero_y, hero_x, distance_from_home, border_crossings, portal_spawned);
         char cmd = get_safe_command();
 
         if (cmd == 'Q') {
             if (map[hero_y][hero_x] == CELL_CAMPFIRE) {
-                printf("Вы вернулись домой с костра (^)!\n");
+                printf("Вы отдохнули у костра (^) и вернулись домой! Пройдено карт леса: %d\n", distance_from_home);
                 running = 0;
             }
             else {
-                printf("Выход домой (Q) работает только на клетке костра (^)!\n");
+                printf("Выход домой (Q) работает только на клетке лагеря/костра (^)!\n");
             }
             continue;
         }
@@ -519,16 +525,51 @@ void start_adventure(void) {
 
         int crossed_edge = apply_torus_coords(&new_y, &new_x, height, width);
 
-        if (is_walkable(map[new_y][new_x])) {
-            hero_y = new_y;
-            hero_x = new_x;
-            if (crossed_edge) {
-                border_crossings++;
-                printf("Вы перешли через край леса на противоположную сторону! (Переходов: %d)\n", border_crossings);
+        if (!is_walkable(map[new_y][new_x])) {
+            printf("Путь преграждает препятствие (%c)!\n", map[new_y][new_x]);
+            continue;
+        }
+
+        hero_y = new_y;
+        hero_x = new_x;
+
+        if (crossed_edge) {
+            border_crossings++;
+            printf("Кольцевой переход через край леса! Всего переходов: %d\n", border_crossings);
+
+            if (border_crossings >= REQUIRED_WRAPS_FOR_PORTAL && !portal_spawned) {
+                while (1) {
+                    int py = rand() % height;
+                    int px = rand() % width;
+                    if (map[py][px] == CELL_EMPTY && (py != hero_y || px != hero_x)) {
+                        map[py][px] = CELL_PORTAL;
+                        portal_spawned = 1;
+                        printf("Вы заблудились! В лесу появился портал (P)!\n");
+                        break;
+                    }
+                }
             }
         }
-        else {
-            printf("Путь преграждает препятствие (%c)!\n", map[new_y][new_x]);
+
+        if (map[hero_y][hero_x] == CELL_PORTAL) {
+            printf("Вы вошли в портал (P)! Генерация нового участка леса...\n");
+
+            free_map(map, height);
+
+            height = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
+            width = MIN_MAP_SIZE + rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1);
+
+            map = create_map(height, width);
+            if (map == NULL) {
+                return;
+            }
+
+            distance_from_home++;
+            border_crossings = 0;
+            portal_spawned = 0;
+
+            generate_forest_map(map, height, width);
+            spawn_hero(map, height, width, &hero_y, &hero_x);
         }
     }
 
